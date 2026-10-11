@@ -1,0 +1,20 @@
+diff --git a/td/telegram/Td.cpp b/td/telegram/Td.cpp
+index 8121c6b..11bb3b8 100644
+--- a/td/telegram/Td.cpp
++++ b/td/telegram/Td.cpp
+@@ -1474,12 +1474,9 @@ Result<std::pair<Td::Parameters, TdDb::Parameters>> Td::get_parameters(
+   if (options_.application_version.empty()) {
+     return Status::Error(400, "Application version must be non-empty");
+   }
+-  if (options_.api_id != 21724) {
+-    options_.application_version += ", TDLib ";
+-    auto version = OptionManager::get_option_synchronously("version");
+-    CHECK(version->get_id() == td_api::optionValueString::ID);
+-    options_.application_version += static_cast<const td_api::optionValueString *>(version.get())->value_;
+-  }
++  // aGram: the session list shows the app name and version only — no
++  // ", TDLib x.y.z" suffix (stock TDLib appends it for every api_id but
++  // Telegram X's).
+   options_.language_pack = string();
+   options_.language_code = string();
+   options_.parameters = string();
