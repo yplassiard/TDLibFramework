@@ -1,0 +1,54 @@
+diff --git a/td/telegram/DeviceTokenManager.cpp b/td/telegram/DeviceTokenManager.cpp
+index 049df2d..1f95f0b 100644
+--- a/td/telegram/DeviceTokenManager.cpp
++++ b/td/telegram/DeviceTokenManager.cpp
+@@ -145,6 +145,12 @@ void DeviceTokenManager::register_device(tl_object_ptr<td_api::DeviceToken> devi
+       token = std::move(device_token->device_token_);
+       token_type = TokenType::Apns;
+       is_app_sandbox = device_token->is_app_sandbox_;
++      // aGram: encrypted APNs pushes, opted in by the client through the
++      // "x_agram_apns_push_encrypt" option before registerDevice. Same key
++      // machinery as the FCM / VoIP paths; the key is exported through the
++      // x_agram_apns_push_key* options so a notification extension can
++      // decrypt pushes without a TDLib instance.
++      encrypt = G()->get_option_boolean("x_agram_apns_push_encrypt");
+       break;
+     }
+     case td_api::deviceTokenFirebaseCloudMessaging::ID: {
+@@ -292,6 +298,18 @@ void DeviceTokenManager::register_device(tl_object_ptr<td_api::DeviceToken> devi
+     }
+     info.encrypt = encrypt;
+   }
++  if (token_type == TokenType::Apns) {
++    // aGram: mirror the APNs push key into client-visible options. Idempotent;
++    // the client receives them as updateOption and stores them where the
++    // notification extension can read them.
++    if (info.encrypt) {
++      G()->set_option_string("x_agram_apns_push_key", base64url_encode(info.encryption_key));
++      G()->set_option_integer("x_agram_apns_push_key_id", info.encryption_key_id);
++    } else {
++      G()->set_option_empty("x_agram_apns_push_key");
++      G()->set_option_empty("x_agram_apns_push_key_id");
++    }
++  }
+   info.promise.set_value(td_api::make_object<td_api::pushReceiverId>());
+   info.promise = std::move(promise);
+   save_info(token_type);
+diff --git a/td/telegram/OptionManager.cpp b/td/telegram/OptionManager.cpp
+index 1cb84ac..35babc2 100644
+--- a/td/telegram/OptionManager.cpp
++++ b/td/telegram/OptionManager.cpp
+@@ -763,6 +763,13 @@ void OptionManager::get_option(const string &name, Promise<td_api::object_ptr<td
+   };
+   switch (name[0]) {
+     // all these options should be added to getCurrentState
++    case 'a':
++      if (name == "agram_push_patch_version") {
++        // aGram: marker proving the APNs push encryption patch is compiled in.
++        // Bump when the patch's behaviour changes; the app's tests read it.
++        return promise.set_value(td_api::make_object<td_api::optionValueInteger>(1));
++      }
++      break;
+     case 'c':
+       if (!is_bot && name == "can_ignore_sensitive_content_restrictions") {
+         return send_closure_later(td_->config_manager_, &ConfigManager::get_content_settings, wrap_promise());
